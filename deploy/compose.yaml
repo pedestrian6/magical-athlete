@@ -1,0 +1,59 @@
+name: magical-athlete-online
+
+services:
+  game:
+    image: magical-athlete-online:${IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    environment:
+      NODE_ENV: production
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATA_DIR: /app/data
+      STATIC_DIR: /app/dist
+      SERVER_STATUS_FILE: /app/data/status.json
+      PUBLIC_ORIGIN: https://${GAME_DOMAIN:?Set GAME_DOMAIN to a domain you control in deploy/.env}
+    volumes:
+      - type: bind
+        source: ../data
+        target: /app/data
+        bind:
+          create_host_path: false
+    networks:
+      - caddy
+    labels:
+      caddy: ${GAME_DOMAIN:?Set GAME_DOMAIN to a domain you control in deploy/.env}
+      caddy.reverse_proxy: "{{upstreams 3000}}"
+      caddy_ingress_network: caddy
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  caddy:
+    external: true
+    name: caddy

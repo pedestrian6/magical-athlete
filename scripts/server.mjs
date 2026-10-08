@@ -1,0 +1,10 @@
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { constants } from 'node:os';
+const state=resolve('logs/dev.status.json');
+const child=spawn(process.execPath,[resolve('node_modules/vite/bin/vite.js'),'--host','127.0.0.1','--port','5173','--strictPort'],{stdio:['ignore','pipe','pipe']});
+const status=(status,extra={})=>writeFileSync(state,JSON.stringify({status,pid:process.pid,childPid:child.pid,url:'http://127.0.0.1:5173',updated_at:new Date().toISOString(),...extra},null,2));
+child.stdout.on('data',chunk=>{process.stdout.write(chunk);if(chunk.toString().includes('127.0.0.1:5173'))status('running');});child.stderr.on('data',chunk=>process.stderr.write(chunk));
+child.on('exit',(code,signal)=>{writeFileSync(resolve('logs/dev.exit'),String(code??(signal?128+(constants.signals[signal]??0):1)));status(code===0?'stopped':'exited',{exitCode:code,signal});process.exitCode=code??0;});
+process.on('SIGTERM',()=>child.kill('SIGTERM'));process.on('SIGINT',()=>child.kill('SIGINT'));
